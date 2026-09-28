@@ -1976,6 +1976,7 @@ The code: `8b6e310` (and branch `feature/miniplayer-resume`, `86486d7`); the not
 | `debug.arc.botwall anon\|all\|<CLIENTS>\|reset\|none` | debug | inject LOGIN_REQUIRED (`anon`: requests without the account); `reset` clears wall memory, saved copy, bot-check block |
 | `debug.arc.player_client TV_TIZEN` | debug | force the head client |
 | `debug.arc.blackhole_via\|_host\|_scope` | debug, benchmark | dead googlevideo host (§30) |
+| `debug.arc.update_manifest <url>` | debug | the in-app updater reads this manifest instead of GitHub's (§32); read once per process |
 
 With `botwall anon` a signed-in walk has one anonymous hit (VISIONOS -> TV_TIZEN), so
 `anon-challenged` needs `all`.
@@ -2073,3 +2074,45 @@ python3 psum.py runs/base runs/candA
   TV_TIZEN `playable=y auth=y` (ff +1661 ms); injected VISIONOS wall -> TV_TIZEN (ff +1087 ms);
   plain opens one VISIONOS call (ff 365-428 ms); no `client=WEB_EMBED`/`client=56` in 1,622 lines.
   `VideoInfoSkipWebEmbedTest` (9); the signed-out walled first walk is 7 requests (was 8).
+
+## 32. In-app update flow (2026-09-28, emulator)
+
+**Before:** the launch check (Splash -> `BootDialogPresenter` -> `AppUpdatePresenter`) downloaded the
+whole APK in silence (69 MB for 1.10.4), then pinned a TV-style "Update" section that the phone put
+under You -> Explore and rendered as a blank page. Settings -> About -> Check for updates gave no
+feedback at all while it downloaded the APK (`LoadingManager` has no case for the settings screen),
+then opened a settings level titled "NewTube 1.10.4" with the changelog as checkbox rows. Android's
+"Install unknown apps" detour returned to that page without installing, and after the update nothing
+said it had happened.
+
+**Now (phone only; the TV path is untouched while `AppUpdatePresenter.setPhoneUpdates` is unset):**
+- `update/AppUpdates` - process-wide state (checking, up to date, available, downloading, ready,
+  failures). The checker runs check-only (`AppUpdateChecker.setDownloadOnCheck(false)`); the APK is
+  fetched when the user taps Update, with progress, and Cancel aborts the OkHttp `Call` at once.
+- `ui/update/MobileUpdateActivity` - a transparent screen hosting one bottom sheet, so About, the
+  You row, the snackbars and the notifications all open the same thing. It keeps out of ViewManager's
+  stack (`MobileActivity.isBackStackScreen() == false`): `addTop()` of a class with no parent mapping
+  clears that stack, and `finish()` then took "no parent" to mean "leave the app".
+- The one-time "Install unknown apps" permission is explained in the sheet and the install resumes
+  when the user comes back with it granted.
+- `update/UpdateDownloadService` (dataSync) only holds the process in the foreground while the APK
+  downloads: on API 35, 5 s after Home, `InetDiagMessage: Destroyed live tcp sockets for uids={ours}`
+  killed the transfer ("Background firewall chain enabled: true"). If the download ends while the app
+  is in the background it posts "Update ready to install", which opens the installer.
+- A known update puts a dot on the You tab (until its sheet is opened) and a row at the top of You;
+  both persist across launches (prefs `newtube_app_updates`) while automatic checks are on.
+- The first launch at the version handed to the installer shows "Updated to NewTube X · What's new".
+- The manifest now carries `downloadSize_<abi>` / `downloadSize` inside `package`
+  (`tools/update_manifest.py`); the sheet shows the size when present. Every top-level key but
+  `package` is read as a version by 1.10.3 and older, so new fields must stay inside `package`.
+
+**Test recipe (no release needed):** build the new code twice from a scratch edit of the stmobile
+`versionCode`/`versionName` (e.g. 11003 and 11005; debug is release-signed when `keystore.properties`
+is present, so one replaces the other), serve a manifest plus the higher APK from the host, and point
+the lower build at it: `adb shell setprop debug.arc.update_manifest http://10.0.2.2:8765/newtube.json`,
+then force-stop. x86_64 AVDs cannot install the real release APKs (no x86_64 libs in the universal
+one): the system installer answers "App not installed as app isn't compatible with your phone".
+Verified on the API 35 AVD: every sheet state, cancel, a download cut by the server, Home during the
+download (finished in the background, notification -> installer), permission round trip, installer
+Cancel returning to "Ready to install", install -> "App installed / Open" -> "Updated to" snackbar ->
+What's new.

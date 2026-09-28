@@ -149,12 +149,24 @@ public abstract class MobileActivity extends MotherActivity {
         return null;
     }
 
+    /**
+     * NEWTUBE(update-flow): false for a transient sheet over whatever screen is below it (the update
+     * sheet), which must stay out of ViewManager's back stack: addTop() of a class with no parent
+     * mapping CLEARS that stack, and finish() then read "no parent" as "leave the app" - closing the
+     * sheet sent the whole app to the background.
+     */
+    protected boolean isBackStackScreen() {
+        return true;
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
 
         // Mandatory: keeps the ViewManager back-stack/parent lookup correct.
-        getViewManager().addTop(this);
+        if (isBackStackScreen()) {
+            getViewManager().addTop(this);
+        }
 
         // While a resumed touch Activity exists, ViewManager launches new screens from it (so
         // they join THIS task). Without it, app-context NEW_TASK launches resolve by affinity
@@ -171,6 +183,11 @@ public abstract class MobileActivity extends MotherActivity {
 
     @Override
     public void finish() {
+        if (!isBackStackScreen()) {
+            super.finish(); // just this sheet; the screen below is already there
+            return;
+        }
+
         if (!getViewManager().hasParentView(this)) {
             if (MiniPlayerBridge.isActive()) {
                 // Root screen (Home) with a docked mini player. properlyFinishTheApp would

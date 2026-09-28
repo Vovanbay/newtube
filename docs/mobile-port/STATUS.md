@@ -12,6 +12,17 @@ Phone-only: the TV flavors, vendored ExoPlayer fork and Leanback modules were
 deleted. Playback uses Media3 1.10.1 with embedded Cronet and an OkHttp fallback.
 Toolchain: AGP 9.2.1 / Gradle 9.6.1 / compileSdk 37 / targetSdk 37 / minSdk 24.
 
+## In-app updates: one sheet from check to install (2026-09-28, emulator)
+
+Settings -> About -> Check for updates and the launch check now lead to one update sheet: the
+release notes per version and the size first, the download only when the user taps Update (with
+progress and Cancel), then Android's installer on its own - also after the one-time "Install
+unknown apps" permission, and from a notification when the download finished in the background.
+A known update shows as a dot on the You tab and a row at the top of You; after the update the app
+says "Updated to NewTube X" with What's new. Replaces a flow that downloaded the APK silently,
+showed nothing while doing it, and pinned a blank "Update" page. Details and the test recipe:
+[HANDOFF §32](HANDOFF.md#32-in-app-update-flow-2026-09-28-emulator). Not yet on the Pixel.
+
 ## Speed, stability and smoothness round 3 (2026-09-25/26, Pixel 9, Wi-Fi + LTE)
 
 Asked for, in the owner's words: "network stability and efficiency, the time to first frame, and

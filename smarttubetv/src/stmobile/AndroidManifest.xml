@@ -139,6 +139,13 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- NEWTUBE(update-flow): holds the app in the foreground while an update APK downloads,
+             so leaving the app doesn't cut the transfer (UpdateDownloadService). -->
+        <service
+            android:name="com.newtube.mobile.update.UpdateDownloadService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <!--
           Touch AppDialog renderer (Wave 3). configChanges/launchMode mirror the other
           registered View Activities: ViewManager.startActivity() always launches with
@@ -148,6 +155,20 @@
         -->
         <activity
             android:name="com.newtube.mobile.ui.dialog.MobileAppDialogActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|layoutDirection|keyboardHidden|uiMode"
+            android:screenOrientation="unspecified"
+            android:theme="@style/Theme.NewTube.Dialog" />
+
+        <!--
+          Update sheet (NEWTUBE update-flow): a transparent host for one bottom sheet, so About's
+          Check for updates, the You tab's update row and the update snackbars all open it, and it
+          is still there to resume the install after Android's "Install unknown apps" screen.
+          configChanges: a rotation keeps the sheet (the download state lives in AppUpdates).
+        -->
+        <activity
+            android:name="com.newtube.mobile.ui.update.MobileUpdateActivity"
             android:exported="false"
             android:launchMode="singleTop"
             android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|layoutDirection|keyboardHidden|uiMode"

@@ -380,6 +380,8 @@ dependencies {
     }
     stmobileImplementation dependencies.project(':doubletapplayerview-media3')
     stmobileImplementation dependencies.project(':sabr-media3')
+    // NEWTUBE(update-flow): the phone's update sheet drives the updater directly (AppUpdates)
+    stmobileImplementation dependencies.project(':appupdatechecker2')
 
     //////// END PLAYER ENGINE //////////
 

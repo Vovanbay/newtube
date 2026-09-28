@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Write newtube.json, the manifest the in-app updater reads (Settings -> About -> Check for updates).
 
-Format (SharedModules appupdatechecker2, AppVersionChecker): a "package" object with the download
+Format (SharedModules appupdatechecker2, UpdateManifest): a "package" object with the download
 links, one list per ABI ("downloadUrlList_<Build.SUPPORTED_ABIS[0]>") plus "downloadUrlList" for any
-other ABI, and one object per version name with its versionCode and changelog lines ("changelog",
-"changelog_<language>"). The app offers the highest versionCode and shows the changelog of every
-listed version newer than the installed one.
+other ABI, each with the size of its file in bytes ("downloadSize_<abi>", "downloadSize" - the update
+screen shows it before anything is downloaded), and one object per version name with its
+versionCode and changelog lines ("changelog", "changelog_<language>"). The app offers the highest
+versionCode and shows the changelog of every listed version newer than the installed one. Every
+top-level key but "package" is read as a version, so new fields must go inside "package".
 
 The changelog lines are the bold lead of each bullet of CHANGELOG.md / CHANGELOG.es.md, from the
 newest few versions. Usage (release.yml runs it on the built APKs):
@@ -108,10 +110,12 @@ def main():
         apk = f"NewTube_{name}_{abi}.apk"
         if (dist / apk).is_file():
             package[f"downloadUrlList_{abi}"] = [f"{base}/{apk}"]
+            package[f"downloadSize_{abi}"] = (dist / apk).stat().st_size
     universal = f"NewTube_{name}_universal.apk"
     if not (dist / universal).is_file():
         sys.exit(f"{universal} is missing from {dist}")
     package["downloadUrlList"] = [f"{base}/{universal}"]
+    package["downloadSize"] = (dist / universal).stat().st_size
 
     manifest = {"package": package}
     for version in list(english)[:args.versions]:

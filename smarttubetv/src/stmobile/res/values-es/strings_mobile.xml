@@ -326,4 +326,43 @@
     <string name="mobile_download_badge_failed">Error</string>
     <string name="mobile_download_channel_name">Descargas</string>
     <string name="mobile_download_channel_desc">Progreso de las descargas de vídeo</string>
+
+    <!-- NEWTUBE(update-flow) -->
+    <string name="mobile_update_checking">Buscando actualizaciones…</string>
+    <string name="mobile_update_up_to_date">NewTube está actualizado</string>
+    <string name="mobile_update_version">Versión %1$s</string>
+    <string name="mobile_update_check_failed_title">No se han podido buscar actualizaciones</string>
+    <string name="mobile_update_check_failed_body">Comprueba la conexión y vuelve a intentarlo.</string>
+    <string name="mobile_update_available_title">Actualización disponible</string>
+    <string name="mobile_update_app_version">NewTube %1$s</string>
+    <string name="mobile_update_app_version_size">NewTube %1$s · %2$s</string>
+    <string name="mobile_update_metered">Estás usando datos móviles.</string>
+    <string name="mobile_update_whats_new_in">Novedades de la %1$s</string>
+    <string name="mobile_update_release_notes">Notas completas de la versión</string>
+    <string name="mobile_update_later">Más tarde</string>
+    <string name="mobile_update_update">Actualizar</string>
+    <string name="mobile_update_downloading_title">Descargando la actualización</string>
+    <string name="mobile_update_progress">%1$s de %2$s</string>
+    <string name="mobile_update_cancel">Cancelar</string>
+    <string name="mobile_update_download_failed_title">La descarga no ha terminado</string>
+    <string name="mobile_update_download_failed_body">Vuelve a intentarlo o descarga NewTube %1$s desde GitHub.</string>
+    <string name="mobile_update_install_failed_title">No se ha podido abrir el instalador</string>
+    <string name="mobile_update_github">Abrir GitHub</string>
+    <string name="mobile_update_try_again">Volver a intentarlo</string>
+    <string name="mobile_update_ready_title">Lista para instalar</string>
+    <string name="mobile_update_install">Instalar</string>
+    <string name="mobile_update_permission_title">Permite que NewTube instale actualizaciones</string>
+    <string name="mobile_update_permission_body">Android lo pregunta una sola vez. En la siguiente pantalla, activa «Permitir desde esta fuente» y vuelve: la actualización se instala al momento.</string>
+    <string name="mobile_update_open_settings">Abrir ajustes</string>
+    <string name="mobile_update_not_now">Ahora no</string>
+    <string name="mobile_update_done">Listo</string>
+    <string name="mobile_update_whats_new">Novedades</string>
+    <string name="mobile_update_updated">Actualizado a NewTube %1$s</string>
+    <string name="mobile_update_downloaded">Actualización descargada</string>
+    <string name="mobile_update_row_available">Actualización disponible</string>
+    <string name="mobile_update_row_downloading">Descargando la actualización</string>
+    <string name="mobile_update_row_downloading_percent">NewTube %1$s · %2$d%%</string>
+    <string name="mobile_update_row_ready">Actualización lista para instalar</string>
+    <string name="mobile_update_channel_name">Actualizaciones de la app</string>
+    <string name="mobile_update_channel_desc">Descarga de una actualización de NewTube</string>
 </resources>

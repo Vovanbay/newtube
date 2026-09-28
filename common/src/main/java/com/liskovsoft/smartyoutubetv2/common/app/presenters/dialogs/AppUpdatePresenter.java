@@ -24,6 +24,7 @@ public class AppUpdatePresenter extends BasePresenter<Void> implements AppUpdate
     @SuppressLint("StaticFieldLeak")
     private static final String TAG = AppUpdatePresenter.class.getSimpleName();
     private static AppUpdatePresenter sInstance;
+    private static PhoneUpdates sPhoneUpdates;
     private final AppUpdateChecker mUpdateChecker;
     private final AppDialogPresenter mSettingsPresenter;
     private final String[] mUpdateManifestUrls;
@@ -50,7 +51,34 @@ public class AppUpdatePresenter extends BasePresenter<Void> implements AppUpdate
         sInstance = null;
     }
 
+    /**
+     * NEWTUBE(update-flow): the phone's own update screen. The phone never downloads an update the
+     * user hasn't asked for, shows the release notes before anything is fetched, and the download's
+     * progress - so both the launch check and Settings -> About -> Check for updates go there.
+     */
+    public interface PhoneUpdates {
+        /** The periodic check at launch: quiet, and only when automatic checks are on. */
+        void checkOnLaunch(Context context);
+
+        /** The user asked (Check for updates): open the update screen. */
+        void showUpdateScreen(Context context);
+    }
+
+    /** Set once from MobileMainApplication. The TV flavors never set it. */
+    public static void setPhoneUpdates(PhoneUpdates phoneUpdates) {
+        sPhoneUpdates = phoneUpdates;
+    }
+
     public void start(boolean forceCheck) {
+        if (sPhoneUpdates != null) {
+            if (forceCheck) {
+                sPhoneUpdates.showUpdateScreen(getContext());
+            } else {
+                sPhoneUpdates.checkOnLaunch(getContext());
+            }
+            return;
+        }
+
         mIsForceCheck = forceCheck;
 
         if (forceCheck) {

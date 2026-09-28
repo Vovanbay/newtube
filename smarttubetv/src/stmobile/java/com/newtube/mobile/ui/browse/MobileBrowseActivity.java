@@ -26,12 +26,14 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import androidx.media3.common.Player;
 import androidx.media3.exoplayer.ExoPlayer;
+import com.google.android.material.badge.BadgeDrawable;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 import com.google.android.material.button.MaterialButton;
 import com.liskovsoft.mediaserviceinterfaces.data.MediaGroup;
@@ -68,6 +70,9 @@ import com.newtube.mobile.casting.CastVolumeKeys;
 import com.newtube.mobile.ui.common.FeedCache;
 import com.newtube.mobile.ui.common.FeedSwapWarmup;
 import com.newtube.mobile.ui.common.MobileActivity;
+import com.newtube.mobile.ui.common.MobileSnackbar;
+import com.newtube.mobile.ui.update.MobileUpdateActivity;
+import com.newtube.mobile.update.AppUpdates;
 import com.newtube.mobile.ui.playback.MiniPlayerBridge;
 import com.newtube.mobile.ui.playback.SystemPipBridge;
 
@@ -242,6 +247,12 @@ public class MobileBrowseActivity extends MobileActivity
         // while it is the section on screen; see onDownloadsChanged.
         DownloadRegistry.instance(this).addListener(mDownloadsListener);
         handleOpenDownloads(getIntent());
+
+        // NEWTUBE(update-flow): a known update puts a dot on the You tab and a row at the top of
+        // its list; the first launch after an update says so (once the feed has had its moment).
+        AppUpdates.instance(this).addListener(mUpdatesListener);
+        refreshUpdateBadge();
+        mBottomNav.postDelayed(mAnnounceUpdateInstalled, UPDATED_NOTICE_DELAY_MS);
 
         // Android 13+ (targetSdk 35): POST_NOTIFICATIONS is a runtime permission - without it
         // the media-playback notification never shows on a fresh install. Ask plainly on every
@@ -827,6 +838,11 @@ public class MobileBrowseActivity extends MobileActivity
      */
     private void rebuildYouRows() {
         mYouRows.removeAllViews();
+        mYouUpdateRow = null;
+
+        if (AppUpdates.instance(this).hasUpdate()) {
+            addYouUpdateRow();
+        }
 
         List<BrowseSection> navSections = selectNavSections();
         List<BrowseSection> personal = new ArrayList<>();
@@ -889,6 +905,94 @@ public class MobileBrowseActivity extends MobileActivity
     }
 
     /** Small secondary-color group label, official-You-page style. */
+    // ---------------------------------------------------------------------------------
+    // Updates (NEWTUBE update-flow)
+    // ---------------------------------------------------------------------------------
+
+    private static final long UPDATED_NOTICE_DELAY_MS = 1_000;
+    private final AppUpdates.Listener mUpdatesListener = this::onUpdatesChanged;
+    private final Runnable mAnnounceUpdateInstalled = this::announceUpdateInstalled;
+    /** The You list's update row while it is built, so progress updates it in place. */
+    @Nullable private View mYouUpdateRow;
+
+    private void onUpdatesChanged() {
+        refreshUpdateBadge();
+
+        if (!mYouShowing) {
+            return;
+        }
+
+        if (AppUpdates.instance(this).hasUpdate() != (mYouUpdateRow != null)) {
+            rebuildYouRows();
+        } else if (mYouUpdateRow != null) {
+            bindYouUpdateRow(mYouUpdateRow); // a progress tick: no list rebuild
+        }
+    }
+
+    /** A dot on the You tab while there is an update the user hasn't opened yet. */
+    private void refreshUpdateBadge() {
+        if (mBottomNav.getMenu().findItem(YOU_ITEM_ID) == null) {
+            return;
+        }
+
+        if (AppUpdates.instance(this).hasUnseenUpdate()) {
+            BadgeDrawable badge = mBottomNav.getOrCreateBadge(YOU_ITEM_ID);
+            badge.setBackgroundColor(getColorInt(R.color.mobile_color_primary));
+            badge.setContentDescriptionNumberless(getString(R.string.mobile_update_row_available));
+            badge.setVisible(true);
+        } else {
+            mBottomNav.removeBadge(YOU_ITEM_ID);
+        }
+    }
+
+    private void addYouUpdateRow() {
+        View row = LayoutInflater.from(this).inflate(R.layout.item_mobile_you_update_row, mYouRows, false);
+        row.setOnClickListener(v -> MobileUpdateActivity.start(this));
+        bindYouUpdateRow(row);
+        mYouRows.addView(row);
+        mYouUpdateRow = row;
+        addYouDivider();
+    }
+
+    private void bindYouUpdateRow(View row) {
+        AppUpdates updates = AppUpdates.instance(this);
+        TextView title = row.findViewById(R.id.mobile_you_update_title);
+        TextView subtitle = row.findViewById(R.id.mobile_you_update_subtitle);
+        String version = updates.getUpdateVersionName();
+        String appVersion = getString(R.string.mobile_update_app_version, version);
+
+        switch (updates.getPhase()) {
+            case DOWNLOADING:
+                long total = updates.getDownloadTotal();
+                title.setText(R.string.mobile_update_row_downloading);
+                subtitle.setText(total > 0 ? getString(R.string.mobile_update_row_downloading_percent, version,
+                        (int) Math.min(100, updates.getDownloadedBytes() * 100 / total)) : appVersion);
+                break;
+            case READY:
+                title.setText(R.string.mobile_update_row_ready);
+                subtitle.setText(appVersion);
+                break;
+            default:
+                title.setText(R.string.mobile_update_row_available);
+                subtitle.setText(appVersion);
+                break;
+        }
+    }
+
+    /** First launch after an update this app installed: confirm it, with the notes one tap away. */
+    private void announceUpdateInstalled() {
+        AppUpdates updates = AppUpdates.instance(this);
+
+        if (isFinishing() || !updates.takeJustUpdated()) {
+            return;
+        }
+
+        boolean hasNotes = !updates.getWhatsNew().isEmpty();
+        MobileSnackbar.show(this, getString(R.string.mobile_update_updated, updates.getInstalledVersionName()),
+                hasNotes ? getString(R.string.mobile_update_whats_new) : null,
+                hasNotes ? () -> MobileUpdateActivity.startWhatsNew(this) : null, MobileSnackbar.NOTICE_DURATION_MS);
+    }
+
     private void addYouGroupLabel(CharSequence text) {
         TextView label = new TextView(this);
         label.setText(text);
@@ -1322,6 +1426,8 @@ public class MobileBrowseActivity extends MobileActivity
 
         mSuppressNavCallback = false;
 
+        refreshUpdateBadge();
+
         // Long-press on a section tab opens the section-management menu (Refresh / Rename /
         // Move / Mark watched / Clear history, ...) - the touch equivalent of the TV D-pad
         // section long-press, formerly the drawer rows' "..." overflow. Item views exist only
@@ -1554,6 +1660,8 @@ public class MobileBrowseActivity extends MobileActivity
         mContentGrid.removeCallbacks(mRestoreItemAnimator);
         MiniPlayerBridge.unregisterMiniHost(this);
         DownloadRegistry.instance(this).removeListener(mDownloadsListener);
+        AppUpdates.instance(this).removeListener(mUpdatesListener);
+        mBottomNav.removeCallbacks(mAnnounceUpdateInstalled);
 
         // Stop observing the cast session; the session itself outlives this screen by design.
         if (mCastSessionManager != null) {

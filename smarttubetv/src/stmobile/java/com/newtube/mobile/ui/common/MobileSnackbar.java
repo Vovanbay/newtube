@@ -17,6 +17,7 @@ import com.google.android.material.snackbar.Snackbar;
 import com.liskovsoft.sharedutils.helpers.MessageHelpers;
 import com.liskovsoft.smartyoutubetv2.tv.R;
 import com.newtube.mobile.ui.dialog.MobileAppDialogActivity;
+import com.newtube.mobile.ui.update.MobileUpdateActivity;
 
 import java.lang.ref.WeakReference;
 
@@ -39,6 +40,11 @@ public final class MobileSnackbar {
     /** Long enough to read and reach the action (Material: 4-10 s for a snackbar with an action). */
     private static final int ACTION_DURATION_MS = 4_000;
     private static final int PLAIN_DURATION_MS = 2_750;
+    /**
+     * A notice the person didn't just cause with a tap (an update finished downloading, the app was
+     * updated): they may be looking elsewhere, so it stays longer (Material: up to 10 s).
+     */
+    public static final int NOTICE_DURATION_MS = 8_000;
 
     private static boolean sInstalled;
     @Nullable private static WeakReference<Activity> sResumed;
@@ -88,7 +94,7 @@ public final class MobileSnackbar {
                 if (sHost != null && sHost.get() == activity) {
                     sHostPaused = true;
                 }
-                if (activity instanceof MobileAppDialogActivity && sPending != null) {
+                if (isOverlay(activity) && sPending != null) {
                     deliverToUnpausedHostLater(sPending);
                 }
             }
@@ -133,7 +139,7 @@ public final class MobileSnackbar {
             }
             Activity host = sHost != null ? sHost.get() : null;
             Activity front = sResumed != null ? sResumed.get() : null;
-            boolean sheetStillOpen = front instanceof MobileAppDialogActivity && !front.isFinishing();
+            boolean sheetStillOpen = isOverlay(front) && !front.isFinishing();
             if (host != null && canHost(host) && !sheetStillOpen) {
                 deliverPending(host);
             }
@@ -163,7 +169,7 @@ public final class MobileSnackbar {
                 sPosted = null;
             }
             if (canHost(host)) {
-                make(host, pending.text, pending.action, pending.onAction);
+                make(host, pending.text, pending.action, pending.onAction, pending.durationMs);
             }
         });
     }
@@ -174,15 +180,21 @@ public final class MobileSnackbar {
 
     public static void show(Context context, CharSequence text, @Nullable CharSequence action,
                             @Nullable Runnable onAction) {
+        show(context, text, action, onAction, 0);
+    }
+
+    /** @param durationMs 0 = the default for a message with/without an action */
+    public static void show(Context context, CharSequence text, @Nullable CharSequence action,
+                            @Nullable Runnable onAction, int durationMs) {
         Activity front = sResumed != null ? sResumed.get() : null;
         if (canHost(front)) {
-            make(front, text, action, onAction);
+            make(front, text, action, onAction, durationMs);
             return;
         }
         // A menu sheet in front (usually closing because of this very tap), or between two screens:
         // the screen that resumes next takes the message. Nothing resumes (app in the background):
         // the old Toast, so the message is never lost.
-        Pending pending = new Pending(text, action, onAction);
+        Pending pending = new Pending(text, action, onAction, durationMs);
         sPending = pending;
         deliverToUnpausedHostLater(pending);
         Context app = context.getApplicationContext();
@@ -216,16 +228,22 @@ public final class MobileSnackbar {
 
     private static boolean canHost(@Nullable Activity activity) {
         return activity != null && !activity.isFinishing() && !activity.isDestroyed()
-                && !(activity instanceof MobileAppDialogActivity);
+                && !isOverlay(activity);
+    }
+
+    /** A screen that is only a sheet over the one behind it: its message goes to that one. */
+    private static boolean isOverlay(@Nullable Activity activity) {
+        return activity instanceof MobileAppDialogActivity || activity instanceof MobileUpdateActivity;
     }
 
     private static void make(Activity activity, CharSequence text, @Nullable CharSequence action,
-                             @Nullable Runnable onAction) {
+                             @Nullable Runnable onAction, int durationMs) {
         View root = activity.findViewById(android.R.id.content);
         if (root == null) {
             return;
         }
-        Snackbar snackbar = Snackbar.make(root, text, action != null ? ACTION_DURATION_MS : PLAIN_DURATION_MS);
+        Snackbar snackbar = Snackbar.make(root, text,
+                durationMs > 0 ? durationMs : action != null ? ACTION_DURATION_MS : PLAIN_DURATION_MS);
         if (action != null && onAction != null) {
             snackbar.setAction(action, v -> onAction.run());
         }
@@ -248,12 +266,14 @@ public final class MobileSnackbar {
         CharSequence text;
         @Nullable final CharSequence action;
         @Nullable final Runnable onAction;
+        final int durationMs;
         final long createdAtMs = SystemClock.uptimeMillis();
 
-        Pending(CharSequence text, @Nullable CharSequence action, @Nullable Runnable onAction) {
+        Pending(CharSequence text, @Nullable CharSequence action, @Nullable Runnable onAction, int durationMs) {
             this.text = text;
             this.action = action;
             this.onAction = onAction;
+            this.durationMs = durationMs;
         }
     }
 }
