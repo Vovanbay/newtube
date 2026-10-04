@@ -44,14 +44,14 @@ jobs:
       NDK_VERSION: 21.0.6113669   # smarttubetv/build.gradle ndkVersion (strips the .so files)
     steps:
       - name: Check out
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        uses: actions/checkout@v4
         with:
           submodules: true
           persist-credentials: false
 
       # No Gradle cache on purpose: a release build starts from nothing another run could have left.
       - name: Set up JDK 21
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
@@ -71,7 +71,7 @@ jobs:
             echo "::error::The release environment has no RELEASE_KEYSTORE_BASE64 secret."
             exit 1
           fi
-          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          printf '%s' "$KEYSTORE_BASE64" \vert{} base64 --decode > "$RUNNER_TEMP/release.jks"
           {
             echo "storeFile=$RUNNER_TEMP/release.jks"
             echo "storePassword=$KEYSTORE_PASSWORD"
@@ -104,8 +104,8 @@ jobs:
           apksigner="$(ls -d "$ANDROID_HOME"/build-tools/[0-9]* | sort -V | tail -1)/apksigner"
           echo "Using $apksigner"
           for apk in dist/*.apk; do
-            out="$("$apksigner" verify --print-certs "$apk" 2>&1)" || { echo "$out"; echo "::error::apksigner rejected $(basename "$apk")."; exit 1; }
-            certs="$(printf '%s\n' "$out" | grep -oE 'certificate SHA-256 digest: [0-9a-f]{64}' | awk '{print $4}' | sort -u)"
+            out="$("$apksigner" verify --print-certs "$apk" 2>&1)" \vert{}\vert{} { echo "$out"; echo "::error::apksigner rejected $(basename "$apk")."; exit 1; }
+            certs="$(printf '\%s\n' "$out" | grep -oE 'certificate SHA-256 digest: [0-9a-f]{64}' | awk '{print $4}' | sort -u)"
             if [ "$certs" != "$EXPECTED_CERT" ]; then
               echo "$out"
               echo "::error::$(basename "$apk") is signed with '${certs}', not NewTube's certificate."
@@ -114,6 +114,33 @@ jobs:
             echo "$(basename "$apk"): signed with NewTube's certificate"
           done
           (cd dist && sha256sum -- *.apk > SHA256SUMS && cat SHA256SUMS)
+
+      # -----------------------------------------------------------------
+      # BƯỚC MỚI: BUNG FILE APK BẰNG APKTOOL VÀ JADX
+      # -----------------------------------------------------------------
+      - name: Decompile APK
+        run: |
+          sudo apt-get update && sudo apt-get install -y apktool jadx
+          mkdir -p decompiled_apk/resources
+          mkdir -p decompiled_apk/java_source
+
+          # Tìm file APK trong thư mục dist/
+          APK_FILE=$(ls dist/NewTube_*.apk | head -n 1)
+          echo "Bắt đầu bung file: $APK_FILE"
+
+          # 1. Bung tài nguyên (Smali, AndroidManifest.xml, res) bằng Apktool
+          apktool d "$APK_FILE" -o decompiled_apk/resources -f
+
+          # 2. Dịch ngược ra mã nguồn Java bằng JADX
+          jadx -d decompiled_apk/java_source "$APK_FILE"
+
+      - name: Upload Decompiled Source Code Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Decompiled-APK-Source-${{ env.TAG || github.sha }}
+          path: decompiled_apk/
+          retention-days: 14
+      # -----------------------------------------------------------------
 
       # The in-app updater's manifest, served from the release as
       # releases/latest/download/newtube.json once it's published (update-feed.yml also copies
@@ -125,14 +152,14 @@ jobs:
           cat dist/newtube.json
 
       - name: Attest the build
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        uses: actions/attest-build-provenance@v2
         with:
           subject-path: dist/*
 
       # Also kept when a check fails, to see what was built; only checked files get attested.
       - name: Keep the APKs as a workflow artifact
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@v4
         with:
           name: NewTube-${{ env.TAG || github.sha }}
           if-no-files-found: ignore
@@ -154,5 +181,5 @@ jobs:
             gh release upload "$TAG" dist/* --clobber
           else
             gh release create "$TAG" dist/* --draft --verify-tag --title "NewTube ${TAG#v}" \
-              --notes "Built by GitHub Actions run ${{ github.run_id }} from $TAG. Write the notes, then publish."
+              --notes "Built by GitHub Actions run ${{ github.run_id }} from$TAG. Write the notes, then publish."
           fi
